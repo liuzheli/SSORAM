@@ -81,16 +81,16 @@ double _write_estimation_normal(const unsigned int level,double& enc_time,double
 	dec_time = 0;
 	add_time = 0;
 	multi_time = 0;
-	for(int i=2;i<=level;i++){
+	for(size_t i=2;i<=level;i++){
 		mul[i] = mul[i-1]*(1.5);
 		add[i] = add[i-1]*(1.5);
 		//mul[i] = mul[i-1];
 		//add[i] = add[i-1];
 	}
 	double estimation_time = 0 ;
-	enc_time = 2*(2<<(level+1)-1)*_infer_jd_paillier_enc;
+	enc_time = 2*((2<<(level+1))-1)*_infer_jd_paillier_enc;
 	estimation_time+= enc_time;
-	for(int i=1;i<=level;i++){
+	for(size_t i=1;i<=level;i++){
 		multi_time+=mul[i]*(2<<(i+1));
 		add_time+=add[i]*(2<<(i+1));
 	}
@@ -110,7 +110,7 @@ double write_estimation_normal(const unsigned int level,double& enc_time,double&
 	double pro;
 	double result;
 	double tmp_enc=0,tmp_dec=0,tmp_add=0,tmp_mul=0;
-	for(int i=1;i<=level;i++){
+	for(size_t i=1;i<=level;i++){
 		pro = PROBALITY(i);
 		result += pro * _write_estimation_normal(i,tmp_enc,tmp_dec,tmp_add,tmp_mul);
 		enc_time+= pro*tmp_enc;
@@ -135,7 +135,7 @@ double write_estimation_shuffleJob(double& enc_time,double& dec_time,double& add
 	double result=0,tmpResult=0;
 	double tmp_enc=0,tmp_dec=0,tmp_add=0,tmp_mul=0;
 	double enc=0,dec=0,add=0,mul=0;
-	for(int i=1;i<=LL;i++){
+	for(size_t i=1;i<=LL;i++){
 		pro = PROBALITY(i);
 		result += pro * _write_estimation_normal(i,tmp_enc,tmp_dec,tmp_add,tmp_mul);
 		enc_time+= pro*tmp_enc;
@@ -144,7 +144,7 @@ double write_estimation_shuffleJob(double& enc_time,double& dec_time,double& add
 		multi_time+= pro*tmp_mul;
 	}
 	unsigned int LLblock = 1<<(LL+1);
-	for(int i=LL+1;i<=maxLevel;i++){
+	for(size_t i=LL+1;i<=maxLevel;i++){
 		pro = PROBALITY(i);
 		tmpResult += pro * _write_estimation_normal(i,tmp_enc,tmp_dec,tmp_add,tmp_mul);
 		enc+= pro*tmp_enc;
@@ -195,12 +195,12 @@ double _read_estimation(const unsigned int _condition,double& enc_time,double& d
 
 	mul = new double[maxLevel+1];
 	mul[1] = _infer_jd_paillier_mul;
-	for(int i=2;i<=maxLevel;i++){
+	for(size_t i=2;i<=maxLevel;i++){
 		mul[i] = mul[i-1]*1.5;
 		//mul[i] = mul[i-1];
 	}
-	for(int i=0;i<levelNum;i++){
-		for(int j=numArr[i];j<=maxLevel;j++){
+	for(size_t i=0;i<levelNum;i++){
+		for(size_t j=numArr[i];j<=maxLevel;j++){
 			multi_time +=mul[j];
 			//cout<<multi_time<<endl;
 		}
@@ -219,7 +219,7 @@ double read_estimation(const unsigned int times,double& enc_time,double& dec_tim
 	add_time = 0;
 	multi_time = 0;
 	double tmp_enc,tmp_dec,tmp_add,tmp_multi;
-	for(int i=0;i<times;i++){
+	for(size_t i=0;i<times;i++){
 		result +=_read_estimation(Util::rand_int(maxBlock),tmp_enc,tmp_dec,tmp_add,tmp_multi);
 		enc_time += tmp_enc;
 		dec_time += tmp_dec;
@@ -245,17 +245,44 @@ double onion_test(double& enc_time,double& dec_time,double& add_time,double& mul
 	double read_enc = 0,read_dec=0,read_add=0,read_mul=0,read=0;
 	double write_enc =0,write_dec=0,write_add=0,write_mul=0,write=0;
 	read = _read_estimation((1<<averageLevel)-1,read_enc,read_dec,read_add,read_mul);
+	cout<<"N:\t"<<maxBlock<<"\treadcost\t"<<read<<endl;
 	averageLevel = ceil((log(maxBlock)/log(2)));
 	write_enc = averageLevel*averageLevel*_infer_jd_paillier_enc;
 	write_add = (averageLevel-1)*(averageLevel-1)*_infer_jd_paillier_add* pow(averageLevel,1.5);
 	write_mul = averageLevel*averageLevel*_infer_jd_paillier_mul* pow(averageLevel,1.5);
+	write = write_enc+write_dec+write_add+write_mul;
+	cout<<"N:\t"<<maxBlock<<"\twritecost\t"<<write<<endl;
 	enc_time = write_enc+read_enc;
 	dec_time = write_dec+read_dec;
 	add_time = write_add+read_add;
 	multi_time = write_mul+read_mul;
-	write = write_enc+write_dec+write_add+write_mul;
+
 	result = write+read;
 	//cout<<"read access:\t"<<result<<"\tenc:\t"<<enc_time<<"\tdec:\t"<<dec_time<<"\tadd:\t"<<add_time<<"\tmul:\t"<<multi_time<<endl;
 	return result;
 
+}
+void oram_efficient_test(){
+	double write_enc=0,write_dec=0,write_add=0,write_mul=0,write=0;
+	double read_enc=0,read_dec=0,read_add=0,read_mul=0,read=0;
+	double enc,dec,add,mul,result;
+	unsigned int baseN = 102400;
+	cout<<"ssoram \t"<<endl;
+	for(int i=1;i<5;i++){
+		read = read_estimation(1000,read_enc,read_dec,read_add,read_mul,baseN*i);
+		cout<<"N:\t"<<baseN*i<<"\treadcost\t"<<read<<endl;
+		write = write_estimation_shuffleJob(write_enc,write_dec,write_add,write_mul,baseN*i);
+		cout<<"N:\t"<<baseN*i<<"\twritecost\t"<<write<<endl;
+		enc = write_enc+read_enc;
+		dec = write_dec+read_dec;
+		add = write_add+read_add;
+		mul = write_mul+read_mul;
+		result = write+read;
+		cout<<"N:\t"<<baseN*i<<"\tcost\t"<<result<<endl;
+	}
+	cout<<"onion \t"<<endl;
+	for(int i=1;i<5;i++){
+		double Cost = onion_test(enc,dec,add,mul,baseN*i);;
+		cout<<"N:\t"<<baseN*i<<"\tcost\t"<<Cost<<endl;
+	}
 }

@@ -32,7 +32,7 @@ void SSORAM_Server_core::djcs_e01e_mul(djcs_public_key *pk, mpz_t*& rop,size_t& 
 	 */
 	off =cipher2_bytes - segLenInBytes;
 	mpz_t* tmpArr = new mpz_t[totolSeg];
-	for(int i=0;i<totolSeg-1;i++){
+	for(size_t i=0;i<totolSeg-1;i++){
 		mpz_init(tmpArr[i]);
 		mpz_set_str (tmpArr[i], buf+off,2);
 		buf[off] = 0;
@@ -40,7 +40,7 @@ void SSORAM_Server_core::djcs_e01e_mul(djcs_public_key *pk, mpz_t*& rop,size_t& 
 	}
 	mpz_init(tmpArr[totolSeg-1]);
 	mpz_set_str(tmpArr[totolSeg-1],buf,2);
-	for(int i=0;i<totolSeg;i++){
+	for(size_t i=0;i<totolSeg;i++){
 		djcs_ep_mul(pk,tmpArr[i],cipher1,tmpArr[i]);
 	}
 	//merge
@@ -52,7 +52,7 @@ void SSORAM_Server_core::djcs_e01e_mul(djcs_public_key *pk, mpz_t*& rop,size_t& 
 void SSORAM_Client_core::djcs_decrypt_merge_array(djcs_private_key *vk,mpz_t rop,mpz_t* tmpArr,size_t& totolSeg,uint32_t segLenInBytes){
 	size_t tmpoff=0;
 	mpz_set_ui(rop,0);
-	for(int i=0;i<totolSeg;i++){
+	for(size_t i=0;i<totolSeg;i++){
 		djcs_decrypt(vk,tmpArr[i],tmpArr[i]);
 		mpz_mul_2exp(tmpArr[i],tmpArr[i],tmpoff);
 		mpz_add(rop,rop,tmpArr[i]);
@@ -60,10 +60,42 @@ void SSORAM_Client_core::djcs_decrypt_merge_array(djcs_private_key *vk,mpz_t rop
 	}
 	djcs_decrypt(vk,rop,rop);
 }
+void SSORAM_Client_core::djcs_decrypt_merge_array_multi(djcs_private_key *vk,mpz_t*& rop,size_t& arrLen,mpz_t* tmpArr,size_t& totolSeg,uint32_t segLenInBits,uint32_t DecryptionLen){
+	size_t tmpoff=0,cipher2_bytes=0,off=0;
+	mpz_t tmpRop;
+	mpz_init(tmpRop);
+	mpz_set_ui(tmpRop,0);
+	for(size_t i=0;i<totolSeg;i++){
+		djcs_decrypt(vk,tmpArr[i],tmpArr[i]);
+		mpz_mul_2exp(tmpArr[i],tmpArr[i],tmpoff);
+		mpz_add(tmpRop,tmpRop,tmpArr[i]);
+		tmpoff+=segLenInBits;
+	}
+	cipher2_bytes = mpz_sizeinbase(tmpRop,2);
+	arrLen = ceil(double(cipher2_bytes)/DecryptionLen);
+	char* buf = new char[arrLen*DecryptionLen];
+	memset (buf, 0, arrLen*DecryptionLen);
+	buf = mpz_get_str(buf,2,tmpRop);
+	buf[0] = '0';
+	mpz_t* tmpAr = new mpz_t[arrLen];
+	off =cipher2_bytes - DecryptionLen;
+	for(int i=arrLen-1;i>0;i--){
+		mpz_init(tmpAr[i]);
+		mpz_set_str (tmpAr[i], buf+off,2);
+		buf[off] = 0;
+		off-=DecryptionLen;
+	}
+	mpz_init(tmpAr[0]);
+	mpz_set_str(tmpAr[0],buf,2);
+	//merge
+	if(rop==tmpArr)
+		delete[] tmpArr;
+	rop = tmpAr;
+}
 void djcs_decrypt_merge_array(djcs_private_key *vk,mpz_t rop,mpz_t* tmpArr,size_t& totolSeg,uint32_t segLenInBytes){
 	size_t tmpoff=0;
 	mpz_set_ui(rop,0);
-	for(int i=0;i<totolSeg;i++){
+	for(size_t i=0;i<totolSeg;i++){
 		djcs_decrypt(vk,tmpArr[i],tmpArr[i]);
 		mpz_mul_2exp(tmpArr[i],tmpArr[i],tmpoff);
 		mpz_add(rop,rop,tmpArr[i]);
@@ -77,7 +109,71 @@ mpz_t* SSORAM_Server_core::djcs_e01e_add(djcs_public_key *pk,mpz_t*& rop,const s
 	assert(cipher_len1==cipher_len2);
 	//calcu
 	mpz_t* tmpArr = new mpz_t[cipher_len1];
-	for(int i=0;i<cipher_len1;i++){
+	for(size_t i=0;i<cipher_len1;i++){
+		mpz_init(tmpArr[i]);
+		djcs_ee_add(pk, tmpArr[i], cipher1[i], cipher2[i]);
+	}
+	//return
+	if(rop !=NULL)
+		delete[] rop;
+	rop = tmpArr;
+	return tmpArr;
+}
+void SSORAM_Server_core::djcs_e01e_mul_multi(djcs_public_key *pk, mpz_t*& rop,size_t& arrLen, mpz_t cipher1, mpz_t* cipher2,size_t cipher2_len,uint32_t segLenInBits,uint32_t DecryptionLen){
+	size_t cipher2_bytes=0;
+	size_t *mpzLen = new size_t[cipher2_len];
+	for(size_t i=0;i<cipher2_len;i++){
+		mpzLen[i] = mpz_sizeinbase(cipher2[i],2);
+		cipher2_bytes += DecryptionLen;
+	}
+
+	size_t totolSeg = ceil(double(cipher2_bytes)/segLenInBits);
+	char *buf = new char[totolSeg*segLenInBits+2];
+	memset (buf, 0, totolSeg*segLenInBits+2);
+	char *offBuf = buf;
+	//special treat for 0
+	*(offBuf++) = '1';
+	int tap = DecryptionLen-mpzLen[0]-1;
+	while(tap>0){
+		*(offBuf++) = '0';
+		tap--;
+	}
+	mpz_get_str(offBuf,2,cipher2[0]);
+	offBuf += mpzLen[0];
+	for(size_t i=1;i<cipher2_len;i++){
+		tap = DecryptionLen-mpzLen[i];
+		while(tap>0){
+			*(offBuf++) = '0';
+			tap--;
+		}
+		mpz_get_str(offBuf,2,cipher2[i]);
+		offBuf += mpzLen[i];
+	}
+	size_t off =cipher2_bytes - segLenInBits;
+	mpz_t* tmpArr = new mpz_t[totolSeg];
+	for(size_t i=0;i<totolSeg-1;i++){
+		mpz_init(tmpArr[i]);
+		mpz_set_str (tmpArr[i], buf+off,2);
+		buf[off] = 0;
+		off-=segLenInBits;
+	}
+	mpz_init(tmpArr[totolSeg-1]);
+	mpz_set_str(tmpArr[totolSeg-1],buf,2);
+	for(size_t i=0;i<totolSeg;i++){
+		djcs_ep_mul(pk,tmpArr[i],cipher1,tmpArr[i]);
+	}
+	//gc
+	if(rop==cipher2)
+		delete[] cipher2;
+	//merge
+	rop = tmpArr;
+	arrLen = totolSeg;
+}
+mpz_t* djcs_e01e_add(djcs_public_key *pk,mpz_t*& rop,const size_t cipher_len1,const size_t cipher_len2,mpz_t* cipher1, mpz_t* cipher2){
+	assert(cipher_len1==cipher_len2);
+	//calcu
+	mpz_t* tmpArr = new mpz_t[cipher_len1];
+	for(size_t i=0;i<cipher_len1;i++){
 		mpz_init(tmpArr[i]);
 		djcs_ee_add(pk, tmpArr[i], cipher1[i], cipher2[i]);
 	}
@@ -89,19 +185,8 @@ mpz_t* SSORAM_Server_core::djcs_e01e_add(djcs_public_key *pk,mpz_t*& rop,const s
 }
 uint32_t Dummy = 0;
 void SSORAM::test(){
+	cout<<"no potential test are waiting\n";
 	// there exists a potential risk on mongodb restore , but I cannot recover the bug setting now, it becomes normal! I have to remains this and check the bug later
-	mpz_t c;
-	mpz_init(c);
-	char* buf;
-	for(uint32_t id=2;id<(2<<height);id++){
-			std::string data = conn->find(id);
-			mpz_set_str (c, data.c_str(),16);
-			buf = mpz_get_str(NULL,2,c);
-			cout<<"fetch id:\t"<<id<<"\tlen:\t"<<mpz_sizeinbase(c,2)<<"datalength:\t"<<data.length()<<"\tvalue:\t\n"<<buf<<endl;
-	        djcs_decrypt(dj_vk, c, c);
-	        gmp_printf("fetch id:\t%d,multiply value:\t %Zd\n", id,c);
-	    }
-	mpz_clear(c);
 }
 SSORAM::SSORAM(const uint32_t& n) {
     height = (uint32_t)ceil(log2((double)(n+1)));
@@ -123,7 +208,7 @@ SSORAM::SSORAM(const uint32_t& n) {
     mpz_set_ui(dummyBlock,Dummy);
     char *buf;
 
-    for(uint32_t id=2;id<(2<<height);id++){
+    for(uint32_t id=2;id<(uint32_t)(2<<height);id++){
         djcs_encrypt(dj_pk, hr, value, dummyBlock); 
         buf = mpz_get_str(NULL,16,value);
         conn->insert(id, std::string(buf,mpz_sizeinbase(value,16)));

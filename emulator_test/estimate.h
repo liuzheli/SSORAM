@@ -32,4 +32,5 @@ double _read_estimation(const unsigned int condition,double& enc_time,double& de
 double read_estimation(const unsigned int times,double& enc_time,double& dec_time,double& add_time,double& multi_time,const unsigned int maxBlock);
 
 double onion_test(double& enc_time,double& dec_time,double& add_time,double& multi_time,const unsigned int maxBlock = 102400);
+void oram_efficient_test();
 # endif

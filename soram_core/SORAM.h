@@ -25,7 +25,8 @@ public:
     SSORAM_Client_core(djcs_public_key *_pk,hcs_random* _hr,uint32_t& _n_blocks, uint32_t _height);
     virtual ~SSORAM_Client_core();
 	void Read(uint32_t& level, int32_t& off,std::vector< std::pair<std::pair<uint32_t,int32_t>, __mpz_struct> >& vec);
-	void djcs_decrypt_merge_array(djcs_private_key *vk,mpz_t rop,mpz_t* src,size_t& arrLen,uint32_t segLenInBytes= (uint32_t)500);
+	void djcs_decrypt_merge_array(djcs_private_key *vk,mpz_t rop,mpz_t* src,size_t& arrLen,uint32_t segLenInBytes= (uint32_t)4000);
+	void djcs_decrypt_merge_array_multi(djcs_private_key *vk,mpz_t*& rop,size_t& arrLen,mpz_t* tmpArr,size_t& totolSeg,uint32_t segLenInBits = 4000,uint32_t DecryptionLen = 6155);
 private:
     djcs_public_key *dj_pk;
     hcs_random *hr;
@@ -44,8 +45,9 @@ public:
     mpz_t* Read(std::vector< std::pair<std::pair<uint32_t,int32_t>, __mpz_struct> >,size_t& segLen);
     void receiveTwinBlock(std::string A1, std::string A2,bool insert);
 private:
+    void djcs_e01e_mul_multi(djcs_public_key *pk, mpz_t*& rop,size_t& arrLen, mpz_t cipher1, mpz_t* cipher2,size_t cipher2_len,uint32_t segLenInBits = 4000,uint32_t DecryptionLen = 6155);
     mpz_t* djcs_e01e_add(djcs_public_key *pk,mpz_t*& rop,const size_t cipher_len1,const size_t cipher_len2,mpz_t* cipher1, mpz_t* cipher2);
-    void djcs_e01e_mul(djcs_public_key *pk, mpz_t*& rop,size_t& arrLen, mpz_t cipher1, mpz_t cipher2,uint32_t segLenInBytes= (uint32_t)500);
+    void djcs_e01e_mul(djcs_public_key *pk, mpz_t*& rop,size_t& arrLen, mpz_t cipher1, mpz_t cipher2,uint32_t segLenInBytes= (uint32_t)4000);
     ServerConnector* conn;
     djcs_public_key *dj_pk;
     std::string* tmpBuffer;
@@ -86,6 +88,8 @@ private:
 };
 
 //patch function
+void djcs_decrypt_merge_array(djcs_private_key *vk,mpz_t rop,mpz_t* tmpArr,size_t& totolSeg,uint32_t segLenInBytes=4000);
+mpz_t* djcs_e01e_add(djcs_public_key *pk,mpz_t*& rop,const size_t cipher_len1,const size_t cipher_len2,mpz_t* cipher1, mpz_t* cipher2);
 
 
 

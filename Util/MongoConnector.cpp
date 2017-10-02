@@ -68,6 +68,15 @@ void MongoConnector::insert(const uint32_t& id, const std::string& encrypted_blo
             .appendBinData("data", (int)encrypted_block.size(), bin_type, (const void*)encrypted_block.c_str()).obj();
     mongo.insert(mongo_collection, obj);
 }
+void MongoConnector::insert(const uint32_t& id, std::string* encrypted_block,size_t block_len, const std::string& ns){
+	std::string mongo_collection = (ns == "") ? collection_name : ns;
+	BinDataType bin_type = BinDataGeneral;
+	BSONObjBuilder builder;
+	builder.append("id", id).appendNumber("len",block_len);
+	for(size_t i=0;i<block_len;i++)
+		builder.appendBinData("data"+std::to_string(i), (int)encrypted_block[i].size(), bin_type, (const void*)encrypted_block[i].c_str());
+	mongo.insert(mongo_collection,builder.obj());
+}
 
 void MongoConnector::insert(const std::vector< std::pair<uint32_t, std::string> >& blocks, const std::string& ns) {
     std::string mongo_collection = (ns == "") ? collection_name : ns;
@@ -129,6 +138,25 @@ std::string MongoConnector::find(const uint32_t& id, const std::string& ns) {
         return std::string(raw_data, (size_t)len);
     }
     return std::string();
+}
+std::string* MongoConnector::find(const uint32_t& id,size_t& len,const std::string& ns){
+	std::string mongo_collection = (ns == "") ? collection_name : ns;
+	std::unique_ptr<DBClientCursor> cursor = mongo.query(mongo_collection, MONGO_QUERY("id" << id));
+	std::string* result = NULL;
+	len = 0;
+	while (cursor->more()) {
+		BSONObj p = cursor->next();
+		int data_len;
+		const char* raw_data;
+		len = p.getField("len").numberInt();
+		result = new std::string[len];
+		for(size_t i =0 ;i<len;i++){
+			raw_data = p.getField("data"+std::to_string(i)).binData(data_len);
+			result[i] = std::string(raw_data, (size_t)data_len);
+		}
+		break;
+	}
+	return result;
 }
 
 void MongoConnector::find(const std::vector<uint32_t>& ids, std::string* sbuffer, size_t& length, const std::string& ns) {
