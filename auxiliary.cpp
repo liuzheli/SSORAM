@@ -429,7 +429,7 @@ void test_jd(){
     mpz_inits(a,b,c,NULL);
     mpz_inits(zero,one,encryptZero,encryptOne,NULL);
 
-    mpz_set_ui(a, 107);
+    mpz_set_ui(a, 170);
     mpz_set_ui(b, 6);
     mpz_set_ui(zero,0);
     mpz_set_ui(one,1);
@@ -438,18 +438,20 @@ void test_jd(){
     djcs_encrypt(dj_pk, hr, encryptZero,zero);
     djcs_encrypt(dj_pk, hr, encryptOne, one);
     djcs_encrypt(dj_pk, hr, a,a);
+
     djcs_encrypt(dj_pk, hr, b,b);
+    djcs_decrypt(dj_vk,a,a);
 
     //encryption 3 layers
     //djcs_e01e_mul(dj_pk,resulta,lena,encryptOne,a);
-    djcs_e01e_mul_multi(dj_pk,resulta,lena,encryptOne,&a,1);
+    //djcs_e01e_mul_multi(dj_pk,resulta,lena,encryptOne,&a,1);
     /*for(int i=0;i<5;i++){
     	djcs_e01e_mul_multi(dj_pk,resulta,lena,encryptOne,resulta,lena);
     }
     for(int i=0;i<5;i++){
     	djcs_decrypt_merge_array_multi(dj_vk,resulta,lena,resulta,lena);
     }*/
-    djcs_decrypt_merge_array(dj_vk,c,resulta,lena);
+    //djcs_decrypt_merge_array(dj_vk,c,resulta,lena);
     gmp_printf("recoverA %Zd\n", c);
 
 
@@ -477,12 +479,12 @@ void test_sOram(){
 
     srand((uint32_t)time(NULL));
 
-    uint32_t N = 2;
+    uint32_t N = 3;
     ORAM* oram = new SSORAM(N);
 
 
-    /*std::string block = oram->get((uint32_t) 1);
-    cout<<block<<endl;*/
+    std::string block = oram->get((uint32_t) 1);
+    cout<<block<<endl;
 
     /*for(size_t i = 2; i < 3; i++) {
 

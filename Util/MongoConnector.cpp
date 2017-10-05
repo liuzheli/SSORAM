@@ -20,6 +20,11 @@
 
 #include <cstdio>
 #include "MongoConnector.h"
+//test block start
+#include <iostream>
+using std::endl;
+using std::cout;
+//test block end
 
 MongoConnector::MongoConnector(const std::string& url, const std::string& collection_name, const bool flag)
         :ServerConnector(), mongo(), collection_name(collection_name) {
@@ -131,19 +136,24 @@ MongoConnector::iterator* MongoConnector::scan() {
 std::string MongoConnector::find(const uint32_t& id, const std::string& ns) {
     std::string mongo_collection = (ns == "") ? collection_name : ns;
     std::unique_ptr<DBClientCursor> cursor = mongo.query(mongo_collection, MONGO_QUERY("id" << id));
+    std::string result;
+    int candidate = 0;
     while (cursor->more()) {
         BSONObj p = cursor->next();
         int len;
         const char* raw_data = p.getField("data").binData(len);
-        return std::string(raw_data, (size_t)len);
+        result = std::string(raw_data, (size_t)len);
+        candidate++;
     }
-    return std::string();
+    assert(candidate==1);
+    return result;
 }
 std::string* MongoConnector::find(const uint32_t& id,size_t& len,const std::string& ns){
 	std::string mongo_collection = (ns == "") ? collection_name : ns;
 	std::unique_ptr<DBClientCursor> cursor = mongo.query(mongo_collection, MONGO_QUERY("id" << id));
 	std::string* result = NULL;
 	len = 0;
+	int candidate = 0;
 	while (cursor->more()) {
 		BSONObj p = cursor->next();
 		int data_len;
@@ -154,7 +164,8 @@ std::string* MongoConnector::find(const uint32_t& id,size_t& len,const std::stri
 			raw_data = p.getField("data"+std::to_string(i)).binData(data_len);
 			result[i] = std::string(raw_data, (size_t)data_len);
 		}
-		break;
+		candidate++;
+		assert(candidate==1);
 	}
 	return result;
 }

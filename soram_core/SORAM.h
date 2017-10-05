@@ -42,8 +42,11 @@ class SSORAM_Server_core{
 public:
     SSORAM_Server_core(const uint32_t& bufferLen,djcs_public_key *_dj_pk,ServerConnector* _conn);
     virtual ~SSORAM_Server_core();
-    mpz_t* Read(std::vector< std::pair<std::pair<uint32_t,int32_t>, __mpz_struct> >,size_t& segLen);
+    mpz_t* Read(djcs_private_key *vk,std::vector< std::pair<std::pair<uint32_t,int32_t>, __mpz_struct> >,size_t& segLen);
     void receiveTwinBlock(std::string A1, std::string A2,bool insert);
+    void freshLayerSpan_vector(mpz_t& _vec);
+    void insert(const uint32_t& id, mpz_t value, const std::string& ns = "");
+    mpz_t* find(const uint32_t& id,size_t& len,const std::string& ns = "");
 private:
     void djcs_e01e_mul_multi(djcs_public_key *pk, mpz_t*& rop,size_t& arrLen, mpz_t cipher1, mpz_t* cipher2,size_t cipher2_len,uint32_t segLenInBits = 4000,uint32_t DecryptionLen = 6155);
     mpz_t* djcs_e01e_add(djcs_public_key *pk,mpz_t*& rop,const size_t cipher_len1,const size_t cipher_len2,mpz_t* cipher1, mpz_t* cipher2);
@@ -52,6 +55,7 @@ private:
     djcs_public_key *dj_pk;
     std::string* tmpBuffer;
     char OutputBuff[4097];
+    mpz_t layerSpan_vector;
 };
 class SSORAM: public ORAM{
 public:
@@ -88,8 +92,10 @@ private:
 };
 
 //patch function
+uint32_t getLevel(uint32_t id);
 void djcs_decrypt_merge_array(djcs_private_key *vk,mpz_t rop,mpz_t* tmpArr,size_t& totolSeg,uint32_t segLenInBytes=4000);
 mpz_t* djcs_e01e_add(djcs_public_key *pk,mpz_t*& rop,const size_t cipher_len1,const size_t cipher_len2,mpz_t* cipher1, mpz_t* cipher2);
+//void djcs_decrypt_merge_array_multi(djcs_private_key *vk,mpz_t*& rop,size_t& arrLen,mpz_t* tmpArr,size_t& totolSeg,uint32_t segLenInBits = 4000,uint32_t DecryptionLen = 6155);
 
 
 
