@@ -483,8 +483,8 @@ void test_sOram(){
     ORAM* oram = new SSORAM(N);
 
 
-    std::string block = oram->get((uint32_t) 1);
-    cout<<block<<endl;
+    std::string block = oram->get(uint32_t(1));
+    cout<<"oram get result is\t"<<block<<endl;
 
     /*for(size_t i = 2; i < 3; i++) {
 
@@ -506,4 +506,12 @@ void test_sOram(){
 
     delete oram;
     mongo::client::shutdown();
+}
+void test_size(){
+	/*cout<<"uint32_t size is\t"<<sizeof(uint32_t)<<endl;
+	cout<<"size_t size is\t"<<sizeof(size_t)<<endl;
+	cout<<"int size is\t"<<sizeof(int)<<endl;
+	cout<<"char size is\t"<<sizeof(char)<<endl;*/
+	//void CharArr2Number(char* str, uint32_t len,mpz_t rop)
+	//char* Number2CharArr(char* des_str, uint32_t& des_len,mpz_t data, bool gc)
 }

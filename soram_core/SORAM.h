@@ -69,9 +69,9 @@ public:
     virtual void put(const uint32_t & key, const std::string & value);
     void test();
 private:
-    void access(const char& op, const uint32_t& block_id, std::string& data);
-    std::string Read(uint32_t& level, int32_t& off);
-    void Write(std::string& data,block_type dataType,const uint32_t& block_id);
+    void access(const char& op, const uint32_t& block_id, mpz_t& data);
+    mpz_t* Read(uint32_t& level, int32_t& off);
+    void Write(const mpz_t& data,block_type dataType,const uint32_t& block_id);
 
     uint32_t first_empty_L;
     uint32_t n_blocks;
@@ -93,6 +93,9 @@ private:
 
 //patch function
 uint32_t getLevel(uint32_t id);
+void CharArr2Number(const char* str, uint32_t len,mpz_t rop);
+// if des_str is not NULL then please make sure that the space is big enough or make gc=true
+char* Number2CharArr(char* des_str, uint32_t& des_len,mpz_t data, bool gc = true);
 void djcs_decrypt_merge_array(djcs_private_key *vk,mpz_t rop,mpz_t* tmpArr,size_t& totolSeg,uint32_t segLenInBytes=4000);
 mpz_t* djcs_e01e_add(djcs_public_key *pk,mpz_t*& rop,const size_t cipher_len1,const size_t cipher_len2,mpz_t* cipher1, mpz_t* cipher2);
 //void djcs_decrypt_merge_array_multi(djcs_private_key *vk,mpz_t*& rop,size_t& arrLen,mpz_t* tmpArr,size_t& totolSeg,uint32_t segLenInBits = 4000,uint32_t DecryptionLen = 6155);

@@ -2,6 +2,7 @@
 #include "emulator_test/estimate.h"
 int main(void)
 {
+	//test_size();
 	//test_jd();
     test_sOram();
 	//test_jd_encryption();
