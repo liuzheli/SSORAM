@@ -219,6 +219,15 @@ void MongoConnector::findByTag(const uint32_t& tag, std::string* sbuffer, size_t
     }
 }
 
+void MongoConnector::update(const uint32_t& id, std::string* encrypted_block,size_t block_len, const std::string& ns){
+	std::string mongo_collection = (ns == "") ? collection_name : ns;
+	BinDataType bin_type = BinDataGeneral;
+	BSONObjBuilder builder;
+	builder.append("id", id).appendNumber("len",block_len);
+	for(size_t i=0;i<block_len;i++)
+		builder.appendBinData("data"+std::to_string(i), (int)encrypted_block[i].size(), bin_type, (const void*)encrypted_block[i].c_str());
+	mongo.update(mongo_collection, BSON("id" << id),builder.obj());
+}
 void MongoConnector::update(const uint32_t& id, const std::string& data, const std::string& ns) {
     std::string mongo_collection = (ns == "") ? collection_name : ns;
     BinDataType bin_type = BinDataGeneral;

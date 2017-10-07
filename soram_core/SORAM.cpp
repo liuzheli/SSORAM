@@ -244,7 +244,7 @@ SSORAM::SSORAM(const uint32_t& n) {
     mpz_inits(dummyBlock,value,NULL);
     //intialize server and client_core
     first_empty_L = 1;
-    server = new SSORAM_Server_core((uint32_t) (2<<height),dj_pk,conn);
+    server = new SSORAM_Server_core((uint32_t) (2<<height),dj_pk,conn,height);
     client_core = new SSORAM_Client_core(dj_pk,hr,n_blocks,height);
     mpz_set_ui(dummyBlock,1);
     djcs_encrypt(dj_pk, hr, value, dummyBlock);
@@ -258,14 +258,32 @@ SSORAM::SSORAM(const uint32_t& n) {
     //gc
     mpz_clear(value);
 }
-SSORAM_Server_core::SSORAM_Server_core(const uint32_t& bufferLen,djcs_public_key *_dj_pk,ServerConnector* _conn){
-    tmpBuffer = new std::string[bufferLen];
+SSORAM_Server_core::SSORAM_Server_core(const uint32_t& _bufferLen,djcs_public_key *_dj_pk,ServerConnector* _conn,uint32_t _height){
+    bufferLen = _bufferLen;
+	tmpBuffer = new mpz_t*[bufferLen];
+    tmpBuffer_dataLen = new size_t[bufferLen];
+    for(int i=0;i<bufferLen;i++){
+    	tmpBuffer[i] = NULL;
+    	tmpBuffer_dataLen[i] = 0;
+    }
+    buffer_usage = 0;
+    tmpBuffer_len = 0;
+    height = _height;
+    level_usage = new bool[height+1];
+    for(uint32_t i=0;i<=height;i++)
+    	level_usage[i] = false;
     conn = _conn;
     dj_pk = _dj_pk;
     mpz_init(layerSpan_vector);
 }
 SSORAM_Server_core::~SSORAM_Server_core(){
+	for(int i=0;i<bufferLen;i++){
+			if(tmpBuffer[i] != NULL)
+				delete[] tmpBuffer[i];
+		}
     delete[] tmpBuffer;
+    delete[] tmpBuffer_dataLen;
+    delete[] level_usage;
     mpz_clear(layerSpan_vector);
 }
 
@@ -288,12 +306,16 @@ SSORAM_Client_core::~SSORAM_Client_core(){
 SSORAM::~SSORAM(){
     delete[] pos_map;
     delete conn;
-
     mpz_clear(dummyBlock);
-
     djcs_free_public_key(dj_pk);
     djcs_free_private_key(dj_vk);
     hcs_free_random(hr);
+    delete client_core;
+    //cout<<"Successfully delete client_core\n";
+    delete server;
+    //cout<<"Successfully delete server\n";
+    //cout<<"successfully delete oram\n";
+
 }
 
 std::string SSORAM::get(const std::string & key) {
@@ -347,22 +369,23 @@ void SSORAM::put(const uint32_t & key, const std::string & value) {
 	mpz_t data;
 	mpz_init(data);
 	CharArr2Number(value.c_str(),value.length(),data);
+	//gmp_printf("the writing in data is %Zd\n",data);
     access('w', key, data);
 }
 
 void SSORAM::access(const char& op, const uint32_t& block_id, mpz_t& data){
-	pos_map[block_id].level = 1;
-	pos_map[block_id].offset = 1;
 	mpz_t result;
 	mpz_init(result);
 	mpz_t* return_value = Read(pos_map[block_id].level,pos_map[block_id].offset);
 	mpz_set(result,return_value[0]);
 	delete[] return_value;
-	gmp_printf("Read result is %Zd\t",result);
+	//gmp_printf("Read result is %Zd\t\n",result);
     if (op == 'w'){
+    	//cout<<"go in real type way\n";
     	mpz_set(result,data);
     	Write(result,RealType,block_id);
     }else{
+    	//cout<<"go in dummy type way\n";
     	Write(result,DummyType,block_id);
     }
     mpz_set(data,result);
@@ -389,46 +412,40 @@ mpz_t* SSORAM::Read(uint32_t& level, int32_t& off){
 	return std::string(buf,mpz_sizeinbase(data,10));*/
 }
 void SSORAM::Write(const mpz_t& data,block_type dataType,const uint32_t& block_id){
-	std::string A[2];
-	char* buf;
-	mpz_t tmpNum;
-	mpz_init(tmpNum);
+	// shuffle written block
+	mpz_t A[2],tmpNum;
+	mpz_inits(A[0],A[1],tmpNum,NULL);
 	if(dataType==DummyType){
 		blockMap[0] = DummyType;
 		blockMap[1] = DummyType;
 		djcs_encrypt(dj_pk, hr, tmpNum, dummyBlock);
-		buf = mpz_get_str(NULL,16,tmpNum);
-		A[0] = std::string(buf,mpz_sizeinbase(tmpNum,16));
+		mpz_set(A[0],tmpNum);
 		djcs_encrypt(dj_pk, hr, tmpNum, dummyBlock);
-		buf = mpz_get_str(NULL,16,tmpNum);
-		A[1] = std::string(buf,mpz_sizeinbase(tmpNum,16));
+		mpz_set(A[1],tmpNum);
 	}else{
 		size_t r = Util::rand_int(2);
 		blockMap[r] = RealType;
 		blockMap[1-r] = DummyType;
-
-		cout<<"the following line is wrong need to be fixed\n";
-		//A[r] = data;
+		mpz_set(tmpNum,data);
+		djcs_encrypt(dj_pk, hr, tmpNum, tmpNum);
+		mpz_set(A[r],tmpNum);
 		djcs_encrypt(dj_pk, hr, tmpNum, dummyBlock);
-		buf = mpz_get_str(NULL,16,tmpNum);
-		A[1-r] = std::string(buf,mpz_sizeinbase(tmpNum,16));
+		mpz_set(A[1-r],tmpNum);
 		pos_map[block_id].level = 0;
 		pos_map[block_id].offset = r;
 	}
-	//djcs_encrypt(dj_pk, hr, encryptOne, one);
-
-	//gc
-	mpz_clear(tmpNum);
-    cout<<"Evict function get\n";
-}
-void SSORAM_Server_core::receiveTwinBlock(std::string A1, std::string A2,bool insert){
-	if(insert){
-		conn->insert(2,A1);
-		conn->insert(3,A2);
-	}else{
-		tmpBuffer[0] = A1;
-		tmpBuffer[1] = A2;
+	// write back to server
+	uint32_t empty_level = server->writeBack(A,2);
+	//cout<<"empty_level is :\t"<<empty_level<<endl;
+	if(empty_level==1)
+		pos_map[block_id].level = 1;
+	else
+	{
+		cout<<"Evict function haven't been finished yet\n";
+		cout<<"shuffle function haven't been finished yet\n";
 	}
+	//gc
+	mpz_clears(A[0],A[1],tmpNum,NULL);
 }
 void SSORAM_Client_core::Read(uint32_t& level, int32_t& off,std::vector< std::pair<std::pair<uint32_t,int32_t>, __mpz_struct> >& vec){
 	vec.clear();
@@ -570,6 +587,38 @@ void SSORAM_Server_core::insert(const uint32_t& id, mpz_t value, const std::stri
 	}
 
 }
+void SSORAM_Server_core::update(const uint32_t& id, mpz_t value, const std::string& ns){
+	uint32_t level = getLevel(id);
+	//should deal with different encryption layer
+	assert(level>0);
+	if(level==1){
+		char* buf = mpz_get_str(NULL,16,value);
+		std::string data= std::string(buf,mpz_sizeinbase(value,16));
+		conn->update(id,&data,1,ns);
+	}else{
+		size_t len=0;
+		mpz_t* result;
+		char* buf;
+		mpz_t tmpV;
+		mpz_init(tmpV);
+		mpz_set(tmpV,value);
+		djcs_e01e_mul_multi(dj_pk,result,len,layerSpan_vector,&tmpV,1);
+		for(uint32_t i=3;i<=level;i++){
+			djcs_e01e_mul_multi(dj_pk,result,len,layerSpan_vector,result,len);
+		}
+		mpz_clear(tmpV);
+
+		std::string *result_str = new std::string[len];
+		for(size_t i=0;i<len;i++){
+			buf = mpz_get_str(NULL,16,result[i]);
+			result_str[i] = std::string(buf,mpz_sizeinbase(result[i],16));
+		}
+		conn->update(id,result_str,len,ns);
+		//gc
+		delete[] result_str;
+		delete[] result;
+	}
+}
 mpz_t* SSORAM_Server_core::find(const uint32_t& id,size_t& len,const std::string& ns){
 	std::string *data = conn->find(id,len);
 	mpz_t *result = new mpz_t[len];
@@ -581,4 +630,32 @@ mpz_t* SSORAM_Server_core::find(const uint32_t& id,size_t& len,const std::string
 	}
 	delete [] data;
 	return result;
+}
+uint32_t SSORAM_Server_core::writeBack(mpz_t* A,size_t len){
+	uint32_t empty_level = 0;
+	for(uint32_t i=1;i<=height;i++)
+		if(!level_usage[i]){
+			empty_level = i;
+			break;
+		}
+	// simple job
+	if(empty_level==1){
+		update(2,A[0]);
+		update(3,A[1]);
+		level_usage[1] = true;
+		return empty_level;
+	}
+	if(len==2){
+		//pure evict function not involved merge operation
+		tmpBuffer[0] = new mpz_t[1];
+		tmpBuffer_dataLen[0] = 1;
+		tmpBuffer[1] = new mpz_t[1];
+		tmpBuffer_dataLen[1] = 1;
+		mpz_inits(tmpBuffer[0][0],tmpBuffer[1][0],NULL);
+		mpz_set(tmpBuffer[0][0],A[0]);
+		mpz_set(tmpBuffer[1][0],A[0]);
+		buffer_usage=2;
+	}
+	// remain for shuffle
+	return empty_level;
 }

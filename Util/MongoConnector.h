@@ -68,6 +68,7 @@ public:
     virtual void find(const uint32_t& low, const uint32_t& high, std::vector<std::string>& blocks, const std::string& ns = "");
     virtual void findByTag(const uint32_t& tag, std::string* sbuffer, size_t& length, const std::string& ns = "");
     virtual void update(const uint32_t& id, const std::string& data, const std::string& ns = "");
+    virtual void update(const uint32_t& id, std::string* encrypted_block,size_t block_len, const std::string& ns = "");
     virtual void update(const std::string* sbuffer, const uint32_t& low, const size_t& len, const std::string& ns = "");
     virtual void update(const std::vector< std::pair<uint32_t, std::string> > blocks, const std::string& ns = "");
 
