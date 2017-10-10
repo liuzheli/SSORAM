@@ -4,7 +4,9 @@
 #include <string>
 #include <gmp.h> 
 #include <unordered_map>
+#include <set>
 #include <cryptopp/config.h>
+#include <unordered_map>
 #include "../Util/ServerConnector.h"
 #include "ORAM.h"
 #include "../Util/Util.h"
@@ -12,21 +14,14 @@
 
 extern uint32_t Dummy;
 enum block_type {DummyType, RealType, NoisyType};
-struct posMap_struct{
-    posMap_struct(){
-        level = 0;
-        offset = 0;
-    }
-    uint32_t level;
-    int32_t offset;
-};
 class SSORAM_Client_core{
 public:
     SSORAM_Client_core(djcs_public_key *_pk,hcs_random* _hr,uint32_t& _n_blocks, uint32_t _height);
     virtual ~SSORAM_Client_core();
-	void Read(uint32_t& level, int32_t& off,std::vector< std::pair<std::pair<uint32_t,int32_t>, __mpz_struct> >& vec);
+	void Read(uint32_t& level, uint32_t& off,std::vector< std::pair<std::pair<uint32_t,int32_t>, __mpz_struct> >& vec);
 	void djcs_decrypt_merge_array(djcs_private_key *vk,mpz_t rop,mpz_t* src,size_t& arrLen,uint32_t segLenInBytes= (uint32_t)4000);
 	void djcs_decrypt_merge_array_multi(djcs_private_key *vk,mpz_t*& rop,size_t& arrLen,mpz_t* tmpArr,size_t& totolSeg,uint32_t segLenInBits = 4000,uint32_t DecryptionLen = 6155);
+	void GenVector(const block_type *blockMap,const uint32_t merge_level,std::vector<__mpz_struct >& vec);
 private:
     djcs_public_key *dj_pk;
     hcs_random *hr;
@@ -48,6 +43,7 @@ public:
     void update(const uint32_t& id, mpz_t value, const std::string& ns = "");
     mpz_t* find(const uint32_t& id,size_t& len,const std::string& ns = "");
     uint32_t writeBack(mpz_t* A,size_t len);
+    bool writeBackTo(const uint32_t empty_level);
 private:
     void djcs_e01e_mul_multi(djcs_public_key *pk, mpz_t*& rop,size_t& arrLen, mpz_t cipher1, mpz_t* cipher2,size_t cipher2_len,uint32_t segLenInBits = 4000,uint32_t DecryptionLen = 6155);
     mpz_t* djcs_e01e_add(djcs_public_key *pk,mpz_t*& rop,const size_t cipher_len1,const size_t cipher_len2,mpz_t* cipher1, mpz_t* cipher2);
@@ -75,8 +71,15 @@ public:
     void test();
 private:
     void access(const char& op, const uint32_t& block_id, mpz_t& data);
-    mpz_t* Read(uint32_t& level, int32_t& off);
+    mpz_t* Read(uint32_t level, uint32_t off);
     void Write(const mpz_t& data,block_type dataType,const uint32_t& block_id);
+    void Shuffle(uint32_t empty_level);
+    bool Merge(const uint32_t merge_level);
+    bool MergeInPlace(const uint32_t merge_level);
+    void GenPairs(const uint32_t merge_level,std::pair<uint32_t,int32_t>*& vec,bool TopLevel = false);
+    //Guarantee the dummyset and realset has enought space or NULL pass in
+    void parseSet(const uint32_t& start, const uint32_t& end,uint32_t*& dummyset,uint32_t*& realset);
+
 
     uint32_t first_empty_L;
     uint32_t n_blocks;
@@ -84,7 +87,8 @@ private:
     ServerConnector* conn;
     SSORAM_Client_core* client_core;
     SSORAM_Server_core* server;
-    posMap_struct* pos_map;
+    std::unordered_map<uint32_t, uint32_t> pos_map;
+    std::unordered_map<uint32_t, uint32_t> pos_map_inv;
     block_type *blockMap;
 
     djcs_public_key *dj_pk;
@@ -103,40 +107,5 @@ void CharArr2Number(const char* str, uint32_t len,mpz_t rop);
 char* Number2CharArr(char* des_str, uint32_t& des_len,mpz_t data, bool gc = true);
 void djcs_decrypt_merge_array(djcs_private_key *vk,mpz_t rop,mpz_t* tmpArr,size_t& totolSeg,uint32_t segLenInBytes=4000);
 mpz_t* djcs_e01e_add(djcs_public_key *pk,mpz_t*& rop,const size_t cipher_len1,const size_t cipher_len2,mpz_t* cipher1, mpz_t* cipher2);
-//void djcs_decrypt_merge_array_multi(djcs_private_key *vk,mpz_t*& rop,size_t& arrLen,mpz_t* tmpArr,size_t& totolSeg,uint32_t segLenInBits = 4000,uint32_t DecryptionLen = 6155);
-
-
-
-
-/*
-class SORAM: public ORAM {
-public:
-    SORAM(const uint32_t& n);
-    virtual ~SORAM();
-
-    virtual std::string get(const std::string & key);
-    virtual void put(const std::string & key, const std::string & value);
-
-    virtual std::string get(const uint32_t & key);
-    virtual void put(const uint32_t & key, const std::string & value);
-private:
-    void access(const char& op, const uint32_t& block_id, std::string& data);
-    bool check(int x, int y, int l);
-
-    void fetchAlongPath(const uint32_t& x, std::string* sbuffer, size_t& length);
-    void loadAlongPath(const uint32_t& x, const std::string* sbuffer, const size_t& length);
-
-    std::unordered_map<uint32_t, std::string> stash;
-    uint32_t *pos_map;
-    std::vector< std::pair<uint32_t, std::string> > insert_buffer;
-
-    byte* key;
-    std::string* sbuffer;
-    uint32_t n_blocks;
-    uint32_t height;
-
-    ServerConnector* conn;
-};*/
-
-#endif //SORAM_H
+#endif //SSORAM_H
 

@@ -223,12 +223,14 @@ mpz_t* djcs_e01e_add(djcs_public_key *pk,mpz_t*& rop,const size_t cipher_len1,co
 uint32_t Dummy = 0;
 void SSORAM::test(){
 	cout<<"no potential test are waiting\n";
+	//GenPairs
 	// there exists a potential risk on mongodb restore , but I cannot recover the bug setting now, it becomes normal! I have to remains this and check the bug later
 }
 SSORAM::SSORAM(const uint32_t& n) {
     height = (uint32_t)ceil(log2((double)(n+1)));
     n_blocks = (uint32_t)2 << (height - 1);
-    pos_map = new posMap_struct[n];
+    pos_map.clear();
+    pos_map_inv.clear();
     conn = new MongoConnector(server_host, "oram.path"+std::to_string(Util::rand_int(102400)));
     blockMap = new block_type[2<<height];
     for(int i=0;i<(2<<height);i++)
@@ -262,7 +264,7 @@ SSORAM_Server_core::SSORAM_Server_core(const uint32_t& _bufferLen,djcs_public_ke
     bufferLen = _bufferLen;
 	tmpBuffer = new mpz_t*[bufferLen];
     tmpBuffer_dataLen = new size_t[bufferLen];
-    for(int i=0;i<bufferLen;i++){
+    for(uint32_t i=0;i<bufferLen;i++){
     	tmpBuffer[i] = NULL;
     	tmpBuffer_dataLen[i] = 0;
     }
@@ -277,7 +279,7 @@ SSORAM_Server_core::SSORAM_Server_core(const uint32_t& _bufferLen,djcs_public_ke
     mpz_init(layerSpan_vector);
 }
 SSORAM_Server_core::~SSORAM_Server_core(){
-	for(int i=0;i<bufferLen;i++){
+	for(uint32_t i=0;i<bufferLen;i++){
 			if(tmpBuffer[i] != NULL)
 				delete[] tmpBuffer[i];
 		}
@@ -304,7 +306,6 @@ SSORAM_Client_core::~SSORAM_Client_core(){
 }
 
 SSORAM::~SSORAM(){
-    delete[] pos_map;
     delete conn;
     mpz_clear(dummyBlock);
     djcs_free_public_key(dj_pk);
@@ -376,7 +377,14 @@ void SSORAM::put(const uint32_t & key, const std::string & value) {
 void SSORAM::access(const char& op, const uint32_t& block_id, mpz_t& data){
 	mpz_t result;
 	mpz_init(result);
-	mpz_t* return_value = Read(pos_map[block_id].level,pos_map[block_id].offset);
+	uint32_t id;
+	auto it = pos_map.find(block_id);
+	if(it != pos_map.end())
+			id = it->second;
+	else
+		id = 0;// this is for test, NOT SECURITY AT ALL
+	uint32_t level = getLevel(id);
+	mpz_t* return_value = Read(level,id-(1<<level));
 	mpz_set(result,return_value[0]);
 	delete[] return_value;
 	//gmp_printf("Read result is %Zd\t\n",result);
@@ -390,7 +398,7 @@ void SSORAM::access(const char& op, const uint32_t& block_id, mpz_t& data){
     }
     mpz_set(data,result);
 }
-mpz_t* SSORAM::Read(uint32_t& level, int32_t& off){
+mpz_t* SSORAM::Read(uint32_t level, uint32_t off){
 	std::vector< std::pair<std::pair<uint32_t,int32_t>, __mpz_struct> > vec;
 	size_t len;
 	mpz_t data;
@@ -431,23 +439,156 @@ void SSORAM::Write(const mpz_t& data,block_type dataType,const uint32_t& block_i
 		mpz_set(A[r],tmpNum);
 		djcs_encrypt(dj_pk, hr, tmpNum, dummyBlock);
 		mpz_set(A[1-r],tmpNum);
-		pos_map[block_id].level = 0;
-		pos_map[block_id].offset = r;
+		pos_map[block_id] = r;
+		pos_map_inv[r] = block_id;
 	}
 	// write back to server
 	uint32_t empty_level = server->writeBack(A,2);
 	//cout<<"empty_level is :\t"<<empty_level<<endl;
-	if(empty_level==1)
-		pos_map[block_id].level = 1;
+	if(empty_level==1){
+		pos_map_inv.erase(pos_map[block_id]);
+		pos_map[block_id] =  pos_map[block_id] + 2;
+		pos_map_inv[pos_map[block_id]] = block_id;
+		blockMap[2] = blockMap[0];
+		blockMap[3] = blockMap[1];
+	}
 	else
 	{
+		cout<<"shuffle to level:\t"<<empty_level<<endl;
+		cout<<"begin shuffle:\t"<<endl;
+		Shuffle(empty_level);
 		cout<<"Evict function haven't been finished yet\n";
 		cout<<"shuffle function haven't been finished yet\n";
 	}
 	//gc
 	mpz_clears(A[0],A[1],tmpNum,NULL);
 }
-void SSORAM_Client_core::Read(uint32_t& level, int32_t& off,std::vector< std::pair<std::pair<uint32_t,int32_t>, __mpz_struct> >& vec){
+void SSORAM::Shuffle(uint32_t empty_level){
+	//test worst case
+	bool worstCase = false;
+	if(!empty_level){
+		worstCase = true;
+		empty_level = height;
+	}
+	//Normal merge operation
+	for(uint32_t level = 1;level<empty_level;level++){
+		assert(Merge(level));
+	}
+	//store back to database, differentiate the worst case
+	if(worstCase)
+		assert(MergeInPlace(empty_level));
+	assert(server->writeBackTo(empty_level));
+}
+bool SSORAM::Merge(const uint32_t merge_level){
+	cout<<"merge tmp array with level"<<merge_level<<endl;
+	std::vector<__mpz_struct > enc_vec;
+	client_core->GenVector(blockMap,merge_level,enc_vec);
+	std::pair<uint32_t,int32_t>* pair_vec = NULL;
+	GenPairs(merge_level,pair_vec);
+	cout<<"server side merge function haven't been finished yet\n";
+	return true;
+}
+void SSORAM::GenPairs(const uint32_t merge_level,std::pair<uint32_t,int32_t>*& vec,bool TopLevel){
+	cout<<"gen pair function get:\n";
+	uint32_t set_len = (1<<merge_level);
+	//parse sets to dummy and real
+	uint32_t *dbSet_dummy = NULL,*dbSet_real = NULL,*tmp_dummy = NULL,*tmp_real = NULL;
+	//cout<<"parse tmp set\n";
+	parseSet(0,set_len,tmp_dummy,tmp_real);
+	//cout<<"parse db set\n";
+	parseSet(set_len,set_len*2,dbSet_dummy,dbSet_real);
+	//permute again
+	set_len = set_len/2;
+	Util::psuedo_random_permute(tmp_dummy,set_len);
+	Util::psuedo_random_permute(tmp_real,set_len);
+	Util::psuedo_random_permute(dbSet_dummy,set_len);
+	Util::psuedo_random_permute(dbSet_real,set_len);
+	//generate the vector
+	if(vec==NULL){
+		if(TopLevel)
+			vec = new std::pair<uint32_t,int32_t>[set_len*2];
+		else
+			vec = new std::pair<uint32_t,int32_t>[set_len*4];
+	}
+	uint32_t count = 0;
+	if(!TopLevel){
+		for(uint32_t i=0;i<set_len;i++){
+			blockMap[count] = DummyType;
+			vec[count++] = std::pair<uint32_t,int32_t>(dbSet_dummy[i],tmp_dummy[i]);
+			blockMap[count] = NoisyType;
+			vec[count++] = std::pair<uint32_t,int32_t>(dbSet_real[i],tmp_real[i]);
+		}
+	}
+	for(uint32_t i=0;i<set_len;i++){
+		blockMap[count] = RealType;
+		pos_map_inv[count] = pos_map_inv[tmp_real[i]];
+		pos_map[pos_map_inv[tmp_real[i]]] = count;
+		pos_map_inv.erase(tmp_real[i]);
+		vec[count++] = std::pair<uint32_t,int32_t>(dbSet_dummy[i],tmp_real[i]);
+		blockMap[count] = RealType;
+		pos_map_inv[count] = pos_map_inv[tmp_real[i]];
+		pos_map[pos_map_inv[dbSet_real[i]]] = count;
+		pos_map_inv.erase(dbSet_real[i]);
+		vec[count++] = std::pair<uint32_t,int32_t>(dbSet_real[i],tmp_dummy[i]);
+	}
+	//permute the vector
+	Util::psuedo_random_permute(vec,count);
+	/*cout<<"gen pair set\n";
+	for(uint32_t i=0;i<count;i++){
+		cout << "first:\t"<<vec[i].first<<"\tsecond\t"<<vec[i].second<<'\n';
+	}*/
+}
+void SSORAM::parseSet(const uint32_t& start, const uint32_t& end,uint32_t*& dummyset,uint32_t*& realset){
+	uint32_t len = (start+end)/2 - start;
+	if(dummyset == NULL)
+		dummyset = new uint32_t[len];
+	if(realset == NULL)
+		realset = new uint32_t[len];
+	uint32_t *tmp = new uint32_t[len*2];
+	uint32_t count =0;
+	for(uint32_t i=start;i<end;i++)
+		if(blockMap[i]==DummyType)
+			tmp[count++] = i;
+	Util::psuedo_random_permute(tmp,count);
+	for(uint32_t i=start;i<end;i++)
+		if(blockMap[i]==RealType)
+			tmp[count++] = i;
+	assert(count == len*2);
+	for(uint32_t i=0;i<len;i++){
+		dummyset[i] = tmp[i];
+		realset[i] = tmp[i+len];
+	}
+	cout<<"dummy set\n";
+	for(uint32_t i=0;i<len;i++){
+		cout << dummyset[i]<<'\t';
+	}
+	cout<<"\nreal set\n";
+	for(uint32_t i=0;i<len;i++){
+		cout << realset[i]<<'\t';
+	}
+	cout<<endl;
+	//gc
+	delete[] tmp;
+}
+
+bool SSORAM::MergeInPlace(const uint32_t merge_level){
+	cout<<"mergeInPlace function haven't been finished yet\n";
+	return true;
+}
+void SSORAM_Client_core::GenVector(const block_type *blockMap,const uint32_t merge_level,std::vector<__mpz_struct >& vec){
+	vec.clear();
+	for(uint32_t id = 0; id<(2<<merge_level);id++){
+		if(blockMap[id]==NoisyType){
+			djcs_encrypt(dj_pk, hr, encryptZero, zero);
+			vec.push_back(encryptZero[0]);
+		}else{
+			djcs_encrypt(dj_pk, hr, encryptOne, one);
+			vec.push_back(encryptOne[0]);
+		}
+	}
+	assert(vec.size()==(2<<merge_level));
+}
+void SSORAM_Client_core::Read(uint32_t& level, uint32_t& off,std::vector< std::pair<std::pair<uint32_t,int32_t>, __mpz_struct> >& vec){
 	vec.clear();
 	for(uint32_t i=1;i<=height;i++){
 		if(i==level){
@@ -658,4 +799,8 @@ uint32_t SSORAM_Server_core::writeBack(mpz_t* A,size_t len){
 	}
 	// remain for shuffle
 	return empty_level;
+}
+bool SSORAM_Server_core::writeBackTo(const uint32_t empty_level){
+	cout<<"Write Back to have not finished it!\n";
+	return true;
 }
