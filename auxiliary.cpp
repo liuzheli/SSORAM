@@ -483,10 +483,13 @@ void test_sOram(){
     ORAM* oram = new SSORAM(N);
 
 
-    oram->put(uint32_t(1),"123");
-    std::string block = oram->get(uint32_t(1));
+    oram->put(uint32_t(1),"block1");
+    oram->put(uint32_t(2),"block2");
 
-    cout<<"oram get result is\t"<<block<<endl;
+    //oram->put(uint32_t(3),"block3");
+    //std::string block = oram->get(uint32_t(1));
+
+    //cout<<"oram get result is\t"<<block<<endl;
 
     /*for(size_t i = 2; i < 3; i++) {
 
