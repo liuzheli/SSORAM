@@ -394,13 +394,13 @@ void SSORAM::access(const char& op, const uint32_t& block_id, mpz_t& data){
 			id = it->second;
 	else
 		id = 0;// this is for test, NOT SECURITY AT ALL
-	if(op =='r'){
+	/*if(op =='r'){
 		cout<<"get block id is\t"<<id;
 		if(blockMap[id]==DummyType)
 			cout<<"\tthe block type is dummy\n";
 		else
 			cout<<"\tthe block type is real\n";
-	}
+	}*/
 	uint32_t level = getLevel(id);
 	mpz_t* return_value = Read(level,id-(1<<level));
 	mpz_set(result,return_value[0]);
@@ -478,8 +478,8 @@ void SSORAM::Write(const mpz_t& data,block_type dataType,const uint32_t& block_i
 	}
 	else
 	{
-		cout<<"begin shuffle:\t";
-		cout<<"shuffle to level:\t"<<empty_level<<endl;
+		/*cout<<"begin shuffle:\t";
+		cout<<"shuffle to level:\t"<<empty_level<<endl;*/
 		Shuffle(empty_level);
 	}
 	//gc
@@ -610,14 +610,14 @@ void SSORAM::GenPairs(const uint32_t merge_level,std::pair<uint32_t,int32_t>*& v
 	for(uint32_t i=0;i<vec_len;i++)
 		blockMap[i] = tmp_blockMap[i];
 	//test and print state
-	cout<<"after permuter the vector is:\n";
+	/*cout<<"after permuter the vector is:\n";
 	for(uint32_t i=0;i<count;i++){
 		cout<<"block id:\t"<<i<<"\t type is "<<blockType_str(blockMap[i])<<"\n";
 	}
 	cout<<"gen pair set\n";
 	for(uint32_t i=0;i<count;i++){
 		cout << "first:\t"<<vec[i].first<<"\tsecond\t"<<vec[i].second<<'\n';
-	}
+	}*/
 	//gc
 	delete [] tmp_blockMap;
 }
@@ -662,18 +662,18 @@ void SSORAM_Client_core::GenVector(djcs_private_key *vk,const block_type *blockM
 	vec.clear();
 	mpz_t *tmp_mpz;
 	for(uint32_t id = 0; id<(2<<merge_level);id++){
-		if(blockMap[id]==NoisyType){
-			djcs_encrypt(dj_pk, hr, encryptZero, zero);
-			tmp_mpz = new mpz_t[1];
-			vec.push_back(tmp_mpz[0][0]);
-			mpz_init(&vec[id]);
-			mpz_set(&vec[id],encryptZero);
-		}else{
+		if(blockMap[id]==RealType){
 			djcs_encrypt(dj_pk, hr, encryptOne, one);
 			tmp_mpz = new mpz_t[1];
 			vec.push_back(tmp_mpz[0][0]);
 			mpz_init(&vec[id]);
 			mpz_set(&vec[id],encryptOne);
+		}else{
+			djcs_encrypt(dj_pk, hr, encryptZero, zero);
+			tmp_mpz = new mpz_t[1];
+			vec.push_back(tmp_mpz[0][0]);
+			mpz_init(&vec[id]);
+			mpz_set(&vec[id],encryptZero);
 		}
 	}
 	/*cout<<"get vector process:\n";
@@ -695,15 +695,15 @@ void SSORAM_Client_core::Read(uint32_t& level, uint32_t& off,std::vector< std::p
 			djcs_encrypt(dj_pk, hr, encryptOne, one);
 			tmp_mpz = new mpz_t[1];
 			vec.push_back(std::make_pair(std::make_pair(i,off),tmp_mpz[0][0]));
-			mpz_init(&vec[i].second);
-			mpz_set(&vec[i].second,encryptOne);
+			mpz_init(&vec[i-1].second);
+			mpz_set(&vec[i-1].second,encryptOne);
 		}else{
 			djcs_encrypt(dj_pk, hr, encryptZero, zero);
 			tmp_mpz = new mpz_t[1];
 			size_t random_offset = Util::rand_int(1<<i);
 			vec.push_back(std::make_pair(std::make_pair(i,random_offset),tmp_mpz[0][0]));
-			mpz_init(&vec[i].second);
-			mpz_set(&vec[i].second,encryptZero);
+			mpz_init(&vec[i-1].second);
+			mpz_set(&vec[i-1].second,encryptZero);
 		}
 	}
 }
@@ -951,46 +951,10 @@ bool SSORAM_Server_core::Merge(djcs_private_key *vk,const uint32_t& merge_level,
 		djcs_e01e_mul_multi(dj_pk,tmpBuffer[i],tmpBuffer_dataLen[i],&vec[i],tmpBuffer[i],tmpBuffer_dataLen[i]);
 	}
 	mpz_t **store = new mpz_t*[pair_len];
-	//test block
-	cout<<"test block:\n";
-	cout<<"block fresh value before add start\n";
-	store[0] = NULL;
-	for(uint32_t i=0;i<mPoint*2;i++){
-		djcs_decrypt_merge_array(vk,rop,tmpBuffer[i],tmpBuffer_dataLen[i]);
-		if(mpz_cmp(rop,zero)==0)
-			cout<<" is dummy\n";
-		else{
-			char* des_str;
-			uint32_t des_len;
-			des_str = Number2CharArr(NULL,des_len,rop);
-			std::string res_str = std::string(des_str,des_len);
-			delete []des_str;
-			cout<<" is "<<res_str<<endl;
-		}
-	}
-	cout<<"block fresh value After add start\n";
-
-	for(uint32_t i=0;i<mPoint*2;i++){
-		store[i] = NULL;
-		djcs_e01e_add(dj_pk,store[i],tmpBuffer_dataLen[i],tmpBuffer_dataLen[i],tmpBuffer[i],tmpBuffer[i]);
-		djcs_decrypt_merge_array(vk,rop,store[i],tmpBuffer_dataLen[i]);
-		if(mpz_cmp(rop,zero)==0)
-			cout<<" is dummy\n";
-		else{
-			char* des_str;
-			uint32_t des_len;
-			des_str = Number2CharArr(NULL,des_len,rop);
-			std::string res_str = std::string(des_str,des_len);
-			delete []des_str;
-			cout<<" is "<<res_str<<endl;
-		}
-	}
-	cout<<"test block end\n";
-	//test block end
 	for(uint32_t i=0;i<pair_len;i++){
 		store[i] = NULL;
 		djcs_e01e_add(dj_pk,store[i],tmpBuffer_dataLen[pairs[i].first],tmpBuffer_dataLen[pairs[i].second],tmpBuffer[pairs[i].first],tmpBuffer[pairs[i].second]);
-		cout<<"multiply plain data:\t at block "<<i;
+		/*cout<<"multiply plain data:\t at block "<<i;
 		djcs_decrypt_merge_array(vk,rop,store[i],tmpBuffer_dataLen[pairs[i].first]);
 		if(mpz_cmp(rop,zero)==0)
 			cout<<" is dummy\n";
@@ -1001,7 +965,7 @@ bool SSORAM_Server_core::Merge(djcs_private_key *vk,const uint32_t& merge_level,
 			std::string res_str = std::string(des_str,des_len);
 			delete []des_str;
 			cout<<" is "<<res_str<<endl;
-		}
+		}*/
 	}
 	mpz_clears(rop,zero,NULL);
 	for(uint32_t i=0;i<pair_len;i++){

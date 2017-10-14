@@ -424,23 +424,22 @@ void test_jd(){
 
     djcs_generate_key_pair(dj_pk,dj_vk,hr,2,2048);
 
-    mpz_t *resulta;//,*resultb,*resultc;
+    mpz_t *resulta,*resultb,*resultc;
     mpz_t a,b,c,zero,one,encryptZero,encryptOne;
     mpz_inits(a,b,c,NULL);
     mpz_inits(zero,one,encryptZero,encryptOne,NULL);
 
     mpz_set_ui(a, 170);
-    mpz_set_ui(b, 6);
+    mpz_set_ui(b, 1);
     mpz_set_ui(zero,0);
     mpz_set_ui(one,1);
 
-    size_t lena;//,lenb,lenc;
+    size_t lena,lenb,lenc;
     djcs_encrypt(dj_pk, hr, encryptZero,zero);
     djcs_encrypt(dj_pk, hr, encryptOne, one);
     djcs_encrypt(dj_pk, hr, a,a);
 
     djcs_encrypt(dj_pk, hr, b,b);
-    djcs_decrypt(dj_vk,a,a);
 
     //encryption 3 layers
     //djcs_e01e_mul(dj_pk,resulta,lena,encryptOne,a);
@@ -452,18 +451,18 @@ void test_jd(){
     	djcs_decrypt_merge_array_multi(dj_vk,resulta,lena,resulta,lena);
     }*/
     //djcs_decrypt_merge_array(dj_vk,c,resulta,lena);
-    gmp_printf("recoverA %Zd\n", c);
+    //gmp_printf("recoverA %Zd\n", c);
 
 
 
-    /*djcs_e01e_mul(dj_pk,resulta,lena,encryptOne,a);
-    djcs_e01e_mul(dj_pk,resultc,lenc,encryptOne,b);
-    djcs_e01e_mul_multi(dj_pk,resultb,lenb,encryptOne,resulta,lena);
-    djcs_e01e_mul_multi(dj_pk,resultc,lenc,encryptZero,resultc,lenc);
-    djcs_e01e_add(dj_pk,resulta,lenc,lenb,resultc,resultb);
-    djcs_decrypt_merge_array_multi(dj_vk,resulta,lena,resulta,lenc);
+    djcs_e01e_mul(dj_pk,resulta,lena,encryptOne,a);
+    djcs_e01e_mul(dj_pk,resultc,lenc,b,encryptZero);
+    //djcs_e01e_mul_multi(dj_pk,resulta,lena,encryptOne,resulta,lena);
+    //djcs_e01e_mul_multi(dj_pk,resultc,lenc,encryptZero,resultc,lenc);
+    djcs_e01e_add(dj_pk,resulta,lenc,lena,resultc,resulta);
+    //djcs_decrypt_merge_array_multi(dj_vk,resulta,lena,resulta,lenc);
     djcs_decrypt_merge_array(dj_vk,c,resulta,lena);
-    gmp_printf("recoverA %Zd\n", c);*/
+    gmp_printf("recoverA %Zd\n", c);
 
     mpz_clears(zero,one,NULL);
     mpz_clears(a, b, c, NULL);
@@ -486,11 +485,14 @@ void test_sOram(){
     oram->put(uint32_t(1),"block1");
     oram->put(uint32_t(2),"block2");
 
-    //oram->put(uint32_t(3),"block3");
-    //std::string block = oram->get(uint32_t(1));
+    oram->put(uint32_t(3),"block3");
+    std::string block = oram->get(uint32_t(1));
 
-    //cout<<"oram get result is\t"<<block<<endl;
+    cout<<"oram get data key is 1 value is\t"<<block<<endl;
 
+    block = oram->get(uint32_t(3));
+
+    cout<<"oram get data key is 3 value is\t"<<block<<endl;
     /*for(size_t i = 2; i < 3; i++) {
 
         char str[12];
