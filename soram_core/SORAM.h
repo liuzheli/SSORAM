@@ -21,7 +21,7 @@ public:
 	void Read(uint32_t& level, uint32_t& off,std::vector< std::pair<std::pair<uint32_t,int32_t>, __mpz_struct> >& vec);
 	void djcs_decrypt_merge_array(djcs_private_key *vk,mpz_t rop,mpz_t* src,size_t& arrLen,uint32_t segLenInBytes= (uint32_t)4000);
 	void djcs_decrypt_merge_array_multi(djcs_private_key *vk,mpz_t*& rop,size_t& arrLen,mpz_t* tmpArr,size_t& totolSeg,uint32_t segLenInBits = 4000,uint32_t DecryptionLen = 6155);
-	void GenVector(djcs_private_key *vk,const block_type *blockMap,const uint32_t merge_level,std::vector<__mpz_struct >& vec);
+	void GenVector(djcs_private_key *vk,block_type *blockMap,const uint32_t merge_level,std::vector<__mpz_struct >& vec);
 private:
     djcs_public_key *dj_pk;
     hcs_random *hr;
@@ -37,7 +37,7 @@ class SSORAM_Server_core{
 public:
     SSORAM_Server_core(const uint32_t& bufferLen,djcs_public_key *_dj_pk,ServerConnector* _conn,uint32_t _height);
     virtual ~SSORAM_Server_core();
-    mpz_t* Read(djcs_private_key *vk,std::vector< std::pair<std::pair<uint32_t,int32_t>, __mpz_struct> >,size_t& segLen);
+    mpz_t* Read(std::vector< std::pair<std::pair<uint32_t,int32_t>, __mpz_struct> >,size_t& segLen);
     void freshLayerSpan_vector(mpz_t& _vec);
     void insert(const uint32_t& id, mpz_t value, const std::string& ns = "");
     void update(const uint32_t& id, mpz_t value, const std::string& ns = "");
@@ -45,7 +45,7 @@ public:
     mpz_t* find(const uint32_t& id,size_t& len,const std::string& ns = "");
     uint32_t writeBack(mpz_t* A,size_t len);
     bool writeBackTo(const uint32_t empty_level);
-    bool Merge(djcs_private_key *vk,const uint32_t& merge_level,std::vector<__mpz_struct >& vec,std::pair<uint32_t,int32_t>* pairs, const uint32_t& pair_len);
+    bool Merge(const uint32_t& merge_level,std::vector<__mpz_struct >& vec,std::pair<uint32_t,int32_t>* pairs, const uint32_t& pair_len);
 
 private:
     void djcs_e01e_mul_multi(djcs_public_key *pk, mpz_t*& rop,size_t& arrLen, mpz_t cipher1, mpz_t* cipher2,size_t cipher2_len,uint32_t segLenInBits = 4000,uint32_t DecryptionLen = 6155);

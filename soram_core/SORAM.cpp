@@ -6,6 +6,7 @@
 #include "../Util/MongoConnector.h"
 #include "../Util/Config.h"
 #include <string>
+#include <unordered_set>
 
 
 // tmp use start
@@ -394,13 +395,10 @@ void SSORAM::access(const char& op, const uint32_t& block_id, mpz_t& data){
 			id = it->second;
 	else
 		id = 0;// this is for test, NOT SECURITY AT ALL
-	/*if(op =='r'){
-		cout<<"get block id is\t"<<id;
-		if(blockMap[id]==DummyType)
-			cout<<"\tthe block type is dummy\n";
-		else
-			cout<<"\tthe block type is real\n";
-	}*/
+	if(op =='r'){
+		cout<<"read operation:\n";
+		cout<<"block id:\t"<<id<<"\t type is "<<blockType_str(blockMap[id])<<endl;
+	}
 	uint32_t level = getLevel(id);
 	mpz_t* return_value = Read(level,id-(1<<level));
 	mpz_set(result,return_value[0]);
@@ -424,7 +422,7 @@ mpz_t* SSORAM::Read(uint32_t level, uint32_t off){
 	vec.clear();
 	client_core->Read(level,off,vec);
 	uint32_t maxLevel = getLevel((1<<vec[vec.size()-1].first.first)+vec[vec.size()-1].first.second);
-	mpz_t* result = server->Read(dj_vk,vec,len);
+	mpz_t* result = server->Read(vec,len);
 	for(uint32_t i=2;i<=maxLevel;i++)
 		client_core->djcs_decrypt_merge_array_multi(dj_vk,result,len,result,len);
 	client_core->djcs_decrypt_merge_array(dj_vk,data,result,len);
@@ -434,8 +432,6 @@ mpz_t* SSORAM::Read(uint32_t level, uint32_t off){
 	mpz_set(result[0],data);
 	mpz_clear(data);
 	return result;
-	/*char* buf = mpz_get_str(NULL,10,data);
-	return std::string(buf,mpz_sizeinbase(data,10));*/
 }
 void SSORAM::Write(const mpz_t& data,block_type dataType,const uint32_t& block_id){
 	// shuffle written block
@@ -457,8 +453,14 @@ void SSORAM::Write(const mpz_t& data,block_type dataType,const uint32_t& block_i
 		mpz_set(A[r],tmpNum);
 		djcs_encrypt(dj_pk, hr, tmpNum, dummyBlock);
 		mpz_set(A[1-r],tmpNum);
-		pos_map[block_id] = r;
-		pos_map_inv[r] = block_id;
+		cout<<"initial write real data id "<<block_id<<" to block "<<r<<endl;
+		pos_map.insert(std::pair<uint32_t,uint32_t>(block_id,r));
+		if(pos_map_inv.find(r)==pos_map_inv.end())
+			pos_map_inv.insert(std::pair<uint32_t,uint32_t>(r,block_id));
+		else{
+			pos_map_inv.at(r) = block_id;
+		}
+
 	}
 	// write back to server
 	uint32_t empty_level = server->writeBack(A,2);
@@ -466,10 +468,10 @@ void SSORAM::Write(const mpz_t& data,block_type dataType,const uint32_t& block_i
 	if(empty_level==1){
 		if(dataType==DummyType){
 		}else{
-			pos_map_inv.erase(pos_map[block_id]);
-			pos_map[block_id] =  pos_map[block_id] + 2;
-			pos_map_inv[pos_map[block_id]] = block_id;
-			//cout<<"data key :\t"<<block_id<<" write in block\t"<<pos_map[block_id]<<endl;
+			uint32_t id = pos_map.at(block_id);
+			pos_map_inv.erase(id);
+			pos_map.at(block_id) =  id + 2;
+			pos_map_inv.insert(std::pair<uint32_t,uint32_t>((id+2),block_id));
 		}
 		blockMap[2] = blockMap[0];
 		blockMap[3] = blockMap[1];
@@ -478,8 +480,7 @@ void SSORAM::Write(const mpz_t& data,block_type dataType,const uint32_t& block_i
 	}
 	else
 	{
-		/*cout<<"begin shuffle:\t";
-		cout<<"shuffle to level:\t"<<empty_level<<endl;*/
+		//cout<<"shuffle to level:\t"<<empty_level<<endl;
 		Shuffle(empty_level);
 	}
 	//gc
@@ -502,26 +503,24 @@ void SSORAM::Shuffle(uint32_t empty_level){
 		assert(MergeInPlace(empty_level));
 	//update blockMap and pos_map
 	if(!worstCase){
-		uint32_t head = (1<<empty_level),dataId;
+		uint32_t head = (1<<empty_level),dataId=0;
 		/*cout<<"before write to empty level:\n";
 		for(uint32_t off=0;off<(2<<empty_level);off++)
 			cout<<"block id:\t"<<off<<"\t type is "<<blockType_str(blockMap[off])<<"\n";*/
 		for(uint32_t off=0;off<(1<<empty_level);off++){
 			blockMap[head+off] = blockMap[off];
 			if(blockMap[off]==RealType){
-				//cout<<"off :\t"<<off<<endl;
-				//cout<<"previous:\t"<<"data id:\t"<<pos_map_inv[off]<<"\tblock id:\t"<<pos_map[pos_map_inv[off]]<<endl;
-				dataId = pos_map_inv[off];
+				dataId = pos_map_inv.at(off);
 				pos_map[dataId] = off+head;
-				pos_map_inv[off+head] = dataId;
 				pos_map_inv.erase(off);
-				//cout<<"update:\t"<<"data id:\t"<<pos_map_inv[off+head]<<"\tblock id:\t"<<pos_map[pos_map_inv[off+head]]<<endl;
+				pos_map_inv.insert(std::pair<uint32_t,uint32_t>(off+head,dataId));
 			}
 			blockMap[off] = DummyType;
 		}
 		/*cout<<"after write to empty level:\n";
-		for(uint32_t off=0;off<(2<<empty_level);off++)
-				cout<<"block id:\t"<<off<<"\t type is "<<blockType_str(blockMap[off])<<"\n";*/
+		for(uint32_t off=(1<<empty_level);off<(2<<empty_level);off++)
+				cout<<"block id:\t"<<off<<"\t type is "<<blockType_str(blockMap[off])<<"\n";
+		cout<<"write operation end\n";*/
 	}else{
 		cout<<"worstCase blockMap arrange are not be written\n";
 	}
@@ -533,8 +532,15 @@ bool SSORAM::Merge(const uint32_t merge_level){
 	client_core->GenVector(dj_vk,blockMap,merge_level,enc_vec);
 	std::pair<uint32_t,int32_t>* pair_vec = NULL;
 	uint32_t pair_len=0;
+	/*cout<<"version blockMap overview\n";
+	for(uint32_t id=0;id<(2<<merge_level);id++){
+		cout<<"block id:\t"<<id<<"\t type is "<<blockType_str(blockMap[id]);
+		if(blockMap[id]==RealType)
+			cout<<"\tdata id\t"<<pos_map_inv.at(id)<<"\tblock id\t"<<pos_map.at(pos_map_inv.at(id));
+		cout<<endl;
+	}*/
 	GenPairs(merge_level,pair_vec,pair_len);
-	return server->Merge(dj_vk,merge_level,enc_vec,pair_vec,pair_len);
+	return server->Merge(merge_level,enc_vec,pair_vec,pair_len);
 }
 void SSORAM::GenPairs(const uint32_t merge_level,std::pair<uint32_t,int32_t>*& vec,uint32_t& vec_len,bool TopLevel){
 	//cout<<"gen pair function get:\n";
@@ -594,30 +600,36 @@ void SSORAM::GenPairs(const uint32_t merge_level,std::pair<uint32_t,int32_t>*& v
 	assert(vec_len == count);
 	//update pos_map, blockMap
 	uint32_t realId,dataId;
-	//cout<<"after shuffle the pos map travelling:\n";
+	/*cout<<"after shuffle the pos map travelling:\n";
+	cout<<"list vector pair start:\n";
+	for(uint32_t i=0;i<count;i++){
+		cout<<"id:\t"<<i<<"\tfirst:\t"<<vec[i].first<<"\ttype:\t"<<blockType_str(blockMap[vec[i].first])<<"\tsecond:\t"<<vec[i].second<<"\ttype:\t"<<blockType_str(blockMap[vec[i].second])<<endl;
+	}
+	cout<<"list vector pair end:\n";*/
+	std::unordered_set<uint32_t> markSet;
+	markSet.clear();
 	for(uint32_t i=0;i<count;i++){
 		tmp_blockMap[i] = getBlockType(vec[i].first,vec[i].second);
 		if(tmp_blockMap[i]==RealType){
 			realId = (blockMap[vec[i].first]==RealType) ? vec[i].first : vec[i].second;
-			//cout<<"previous:\t"<<"data id:\t"<<pos_map_inv[realId]<<"\tblock id:\t"<<pos_map[pos_map_inv[realId]]<<endl;
-			dataId= pos_map_inv[realId];
-			pos_map_inv[i] = dataId;
-			pos_map[dataId] = i;
-			pos_map_inv.erase(realId);
-			//cout<<"update:\t"<<"data id:\t"<<pos_map_inv[i]<<"\tblock id:\t"<<pos_map[pos_map_inv[i]]<<endl;
+			if(pos_map_inv.find(realId)==pos_map_inv.end())
+				tmp_blockMap[i] = NoisyType;
+			else{
+				dataId = pos_map_inv.at(realId);
+				if(markSet.find(dataId)==markSet.end()){
+					pos_map.at(dataId) = i;
+					markSet.insert(dataId);
+				}else
+					tmp_blockMap[i] = NoisyType;
+			}
 		}
 	}
-	for(uint32_t i=0;i<vec_len;i++)
-		blockMap[i] = tmp_blockMap[i];
-	//test and print state
-	/*cout<<"after permuter the vector is:\n";
-	for(uint32_t i=0;i<count;i++){
-		cout<<"block id:\t"<<i<<"\t type is "<<blockType_str(blockMap[i])<<"\n";
+	pos_map_inv.clear();
+	for(auto it = pos_map.begin();it!=pos_map.end();it++){
+		pos_map_inv.insert(std::pair<uint32_t,uint32_t>(it->second,it->first));
 	}
-	cout<<"gen pair set\n";
-	for(uint32_t i=0;i<count;i++){
-		cout << "first:\t"<<vec[i].first<<"\tsecond\t"<<vec[i].second<<'\n';
-	}*/
+	for(uint32_t i=0;i<vec_len;i++)
+			blockMap[i] = tmp_blockMap[i];
 	//gc
 	delete [] tmp_blockMap;
 }
@@ -634,8 +646,9 @@ void SSORAM::parseSet(const uint32_t& start, const uint32_t& end,uint32_t*& dumm
 			tmp[count++] = i;
 	Util::psuedo_random_permute(tmp,count);
 	for(uint32_t i=start;i<end;i++)
-		if(blockMap[i]==RealType)
+		if(blockMap[i]!=DummyType)
 			tmp[count++] = i;
+	//cout<<"start :\t"<<start<<"\tend:\t"<<end<<"\tlen:\t"<<len<<"\tcount:\t"<<count<<endl;
 	assert(count == len*2);
 	for(uint32_t i=0;i<len;i++){
 		dummyset[i] = tmp[i];
@@ -658,7 +671,7 @@ bool SSORAM::MergeInPlace(const uint32_t merge_level){
 	cout<<"mergeInPlace function haven't been finished yet\n";
 	return true;
 }
-void SSORAM_Client_core::GenVector(djcs_private_key *vk,const block_type *blockMap,const uint32_t merge_level,std::vector<__mpz_struct >& vec){
+void SSORAM_Client_core::GenVector(djcs_private_key *vk,block_type *blockMap,const uint32_t merge_level,std::vector<__mpz_struct >& vec){
 	vec.clear();
 	mpz_t *tmp_mpz;
 	for(uint32_t id = 0; id<(2<<merge_level);id++){
@@ -669,6 +682,7 @@ void SSORAM_Client_core::GenVector(djcs_private_key *vk,const block_type *blockM
 			mpz_init(&vec[id]);
 			mpz_set(&vec[id],encryptOne);
 		}else{
+			blockMap[id] = DummyType;
 			djcs_encrypt(dj_pk, hr, encryptZero, zero);
 			tmp_mpz = new mpz_t[1];
 			vec.push_back(tmp_mpz[0][0]);
@@ -707,7 +721,7 @@ void SSORAM_Client_core::Read(uint32_t& level, uint32_t& off,std::vector< std::p
 		}
 	}
 }
-mpz_t* SSORAM_Server_core::Read(djcs_private_key *vk,std::vector< std::pair<std::pair<uint32_t,int32_t>, __mpz_struct> > vec,size_t& segLen){
+mpz_t* SSORAM_Server_core::Read(std::vector< std::pair<std::pair<uint32_t,int32_t>, __mpz_struct> > vec,size_t& segLen){
 	mpz_t c;
 	mpz_t *data,*result=NULL;
 	size_t result_len,len;
@@ -866,11 +880,9 @@ void SSORAM_Server_core::update(const uint32_t& id, mpz_t *value, const size_t& 
 mpz_t* SSORAM_Server_core::find(const uint32_t& id,size_t& len,const std::string& ns){
 	std::string *data = conn->find(id,len);
 	mpz_t *result = new mpz_t[len];
-	//cout<<"id:\t"<<id<<"\tdata:\n";
 	for(size_t i=0;i<len;i++){
 		mpz_init(result[i]);
 		mpz_set_str (result[i], data[i].c_str(),16);
-		//cout<<"data seg\t"<<i<<"\tdata\t"<<data[i]<<endl;
 	}
 	delete [] data;
 	return result;
@@ -882,6 +894,7 @@ uint32_t SSORAM_Server_core::writeBack(mpz_t* A,size_t len){
 			empty_level = i;
 			break;
 		}
+	//cout<<"server write back action skip\n";
 	// simple job
 	if(empty_level==1){
 		update(2,A[0]);
@@ -914,10 +927,11 @@ bool SSORAM_Server_core::writeBackTo(const uint32_t empty_level){
 		tmpBuffer_dataLen[off] = 0;
 	}
 	buffer_usage = 0;
+	level_usage[empty_level] = true;
 	result_sig = true;
 	return result_sig;
 }
-bool SSORAM_Server_core::Merge(djcs_private_key *vk,const uint32_t& merge_level,std::vector<__mpz_struct >& vec,std::pair<uint32_t,int32_t>* pairs, const uint32_t& pair_len){
+bool SSORAM_Server_core::Merge(const uint32_t& merge_level,std::vector<__mpz_struct >& vec,std::pair<uint32_t,int32_t>* pairs, const uint32_t& pair_len){
 	bool return_sig= false;
 	uint32_t mPoint = vec.size()/2;
 	//erase noisy
@@ -930,23 +944,6 @@ bool SSORAM_Server_core::Merge(djcs_private_key *vk,const uint32_t& merge_level,
 	mpz_t rop,zero;
 	mpz_inits(rop,zero,NULL);
 	mpz_set_ui(zero,0);
-	/*for(uint32_t i=0;i<mPoint*2;i++){
-		cout<<"block "<<i<<"value";
-		djcs_decrypt(vk,rop,tmpBuffer[i][0]);
-		if(mpz_cmp(rop,zero)==0)
-			cout<<" is dummy\n";
-		else{
-			char* des_str;
-			uint32_t des_len;
-			des_str = Number2CharArr(NULL,des_len,rop);
-			std::string res_str = std::string(des_str,des_len);
-			delete []des_str;
-			cout<<" is "<<res_str<<endl;
-		}
-		gmp_printf("block %d's plain vector is %Zd\n",i,&vec[i]);
-		djcs_decrypt(vk,rop,&vec[i]);
-		gmp_printf("block %d's vector is %Zd\n",i,rop);
-	}*/
 	for(uint32_t i=0;i<mPoint*2;i++){
 		djcs_e01e_mul_multi(dj_pk,tmpBuffer[i],tmpBuffer_dataLen[i],&vec[i],tmpBuffer[i],tmpBuffer_dataLen[i]);
 	}
@@ -954,18 +951,6 @@ bool SSORAM_Server_core::Merge(djcs_private_key *vk,const uint32_t& merge_level,
 	for(uint32_t i=0;i<pair_len;i++){
 		store[i] = NULL;
 		djcs_e01e_add(dj_pk,store[i],tmpBuffer_dataLen[pairs[i].first],tmpBuffer_dataLen[pairs[i].second],tmpBuffer[pairs[i].first],tmpBuffer[pairs[i].second]);
-		/*cout<<"multiply plain data:\t at block "<<i;
-		djcs_decrypt_merge_array(vk,rop,store[i],tmpBuffer_dataLen[pairs[i].first]);
-		if(mpz_cmp(rop,zero)==0)
-			cout<<" is dummy\n";
-		else{
-			char* des_str;
-			uint32_t des_len;
-			des_str = Number2CharArr(NULL,des_len,rop);
-			std::string res_str = std::string(des_str,des_len);
-			delete []des_str;
-			cout<<" is "<<res_str<<endl;
-		}*/
 	}
 	mpz_clears(rop,zero,NULL);
 	for(uint32_t i=0;i<pair_len;i++){

@@ -4,7 +4,10 @@ int main(void)
 {
 	//test_size();
 	//test_jd();
-    test_sOram();
+	for(int i=0;i<1;i++){
+		test_sOram();
+	}
+
 	//test_jd_encryption();
 	//test_jd_efficiency();
 	//test_p_efficiency();

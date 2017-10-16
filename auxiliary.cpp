@@ -478,36 +478,20 @@ void test_sOram(){
 
     srand((uint32_t)time(NULL));
 
-    uint32_t N = 3;
+    uint32_t N = 8;
     ORAM* oram = new SSORAM(N);
 
+    std::string value;
+    uint32_t maxKey = 5;
+    for(uint32_t key=1;key<=maxKey;key++){
+    	value = "block"+ std::to_string(key);
+    	oram->put(key,value);
+    }
 
-    oram->put(uint32_t(1),"block1");
-    oram->put(uint32_t(2),"block2");
-
-    oram->put(uint32_t(3),"block3");
-    std::string block = oram->get(uint32_t(1));
-
-    cout<<"oram get data key is 1 value is\t"<<block<<endl;
-
-    block = oram->get(uint32_t(3));
-
-    cout<<"oram get data key is 3 value is\t"<<block<<endl;
-    /*for(size_t i = 2; i < 3; i++) {
-
-        char str[12];
-        sprintf(str, "%zu\n", i);
-        std::string key(str);
-        std::string block = oram->get(key);
-        cout<<block<<endl;
-        if(block=="0")
-        	cout<<block;
-        else{
-        	uint32_t value;
-        	memcpy((& value), block.c_str(), sizeof(uint32_t));
-        	printf("%d ", value);
-        }
-    }*/
+    for(uint32_t key=1;key<=maxKey;key++){
+		value = oram->get(key);
+		cout<<"oram get data key is "<<key<<" value is\t"<<value<<endl;
+	}
 
     printf("\n=========================================================================\n");
 
